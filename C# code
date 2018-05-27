@@ -1,0 +1,357 @@
+using System;
+using System.Data;
+using System.Windows.Forms;
+using MySql.Data.MySqlClient;
+
+namespace XAMPP_Test1
+{
+    public partial class Form1 : Form
+    {
+        String connectinfo;
+        string insertcommand, searchcommand, updatecommand, deletecommand, loadcommand;
+        string OriginalName, OriginalID, OriginalScore;
+        int a = 0, row = 0;
+        DialogResult choose;
+
+        public Form1()
+        {
+            InitializeComponent();
+
+            connectinfo = "server=127.0.0.1;port=3306;username=root;password=root;database=test1;sslmode=none";//連線資訊
+            loadcommand = "SELECT * FROM `first test` WHERE 1";
+
+            PreviousItem.Enabled = false;
+            NextItem.Enabled = false;
+            InsertData.Enabled = false;
+            SearchData.Enabled = false;
+            UpdateData.Enabled = false;
+            DeleteData.Enabled = false;
+        }
+
+        private void ClickInsert(object sender, EventArgs e)
+        {
+            MySqlConnection databaseconnect = new MySqlConnection(connectinfo);//建立連線
+            databaseconnect.Open();//連線開啟
+            try
+            {
+                float.Parse(KeyScore.Text);//將成績轉為float
+                if (KeyName.Text.LastIndexOf(" ") != -1 || KeyID.Text.LastIndexOf(" ") != -1 || KeyScore.Text.LastIndexOf(" ") != -1 || KeyName.Text == "" || KeyID.Text == "" || KeyScore.Text == "")//檢查是否有空格或未輸入
+                    MessageBox.Show("請檢查所有欄位都已填寫正確，不可留白或有空格！！", "輸入錯誤", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                else
+                {
+                    //============新增============
+                    insertcommand = "INSERT INTO `first test`(`姓名`, `學號`, `成績`) VALUES (@insertname,@insertid,@insertscore)";//insert指令
+                    MySqlCommand insertdata = new MySqlCommand(insertcommand, databaseconnect);//將SQL指令傳至指定的資料表
+                    insertdata.Parameters.AddWithValue("@insertname", KeyName.Text);   //
+                    insertdata.Parameters.AddWithValue("@insertid", KeyID.Text);       //將TextBox的值給予SQL指令
+                    insertdata.Parameters.AddWithValue("@insertscore", KeyScore.Text); //
+                    insertdata.ExecuteNonQuery();//執行SQL指令
+                    //============================
+
+                    //============刷新============
+                    MySqlCommand loaddata = new MySqlCommand(loadcommand, databaseconnect);//將SQL指令傳至指定的資料表
+
+                    DataTable showdata = new DataTable();
+                    MySqlDataAdapter show = new MySqlDataAdapter(loaddata);
+                    show.Fill(showdata);
+                    DataView.DataSource = showdata;
+                    //============================
+                }
+            }
+            catch(Exception showerror)
+            {
+                if(showerror.Message.LastIndexOf("for key 'NameUnique'") !=-1)
+                    MessageBox.Show("該姓名已存在，請重新輸入 !", "輸入重複", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                else if(showerror.Message.LastIndexOf("for key 'IDUnique'") != -1)
+                    MessageBox.Show("該學號已存在，請重新輸入 !", "輸入重複", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                else if(showerror.Message.LastIndexOf("輸入字串格式不正確") != -1)
+                    MessageBox.Show("成績欄位輸入格式錯誤，該欄位必須為數字 !", "輸入錯誤", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
+            finally { databaseconnect.Close(); }//連線關閉
+        }
+
+        private void ClickSearch(object sender, EventArgs e)
+        {            
+            //============設定搜尋指令============
+            if (KeyName.Text.LastIndexOf(" ") != -1 || KeyID.Text.LastIndexOf(" ") != -1 || KeyScore.Text.LastIndexOf(" ") != -1)
+                MessageBox.Show("查無資料\n請檢查所有欄位都已填寫正確，不可有空格！！");
+            else if (KeyScore.Text!="")
+            {
+                if (KeyName.Text != "")
+                    searchcommand = "SELECT `姓名`, `學號`, `成績` FROM `first test` WHERE `姓名`=@searchname && `成績`=@searchscore";
+                else if (KeyID.Text != "")
+                    searchcommand = "SELECT `姓名`, `學號`, `成績` FROM `first test` WHERE `學號`=@searchid && `成績`=@searchscore";
+                else if (KeyName.Text == "" && KeyID.Text == "")
+                    searchcommand = "SELECT `姓名`, `學號`, `成績` FROM `first test` WHERE `成績`=@searchscore";
+            }
+            else
+            {
+                if (KeyName.Text != "")
+                    searchcommand = "SELECT `姓名`, `學號`, `成績` FROM `first test` WHERE `姓名`=@searchname";
+                else if (KeyID.Text != "")
+                    searchcommand = "SELECT `姓名`, `學號`, `成績` FROM `first test` WHERE `學號`=@searchid";
+            }
+            //====================================
+
+            //============開始搜尋============
+            MySqlConnection databaseconnect = new MySqlConnection(connectinfo);//建立連線
+            databaseconnect.Open();//連線開啟
+            MySqlCommand searchdata = new MySqlCommand(searchcommand, databaseconnect);
+            searchdata.Parameters.AddWithValue("@searchname", KeyName.Text);   //
+            searchdata.Parameters.AddWithValue("@searchid", KeyID.Text);       //將TextBox的值給予SQL指令
+            searchdata.Parameters.AddWithValue("@searchscore", KeyScore.Text); //
+            searchdata.ExecuteNonQuery();//執行搜尋指令
+            //================================
+            
+            //============顯示搜尋結果============
+            DataTable showdata = new DataTable();
+            MySqlDataAdapter show = new MySqlDataAdapter(searchdata);
+            show.Fill(showdata);
+            DataView.DataSource = showdata;
+            //====================================
+
+            databaseconnect.Close();
+            
+            //============決定按鈕是否可以按============
+            int datacount = DataView.Rows.Count;
+             if (datacount == 1)
+            {
+                PreviousItem.Enabled = false;
+                NextItem.Enabled = false;
+            }
+            else
+            {
+                PreviousItem.Enabled = true;
+                NextItem.Enabled = true;
+            }
+            UpdateData.Enabled = true;
+            DeleteData.Enabled = true;
+            //==========================================
+
+            row = 0;
+
+            try
+            {
+                //============在輸入框顯示目前所選資料============
+                KeyName.Text = DataView.Rows[0].Cells[0].Value.ToString();
+                KeyID.Text = DataView.Rows[0].Cells[1].Value.ToString();
+                KeyScore.Text = DataView.Rows[0].Cells[2].Value.ToString();
+                //================================================
+
+                //============紀錄第一次顯示的資料============
+                OriginalName = KeyName.Text;
+                OriginalID = KeyID.Text;
+                OriginalScore = KeyScore.Text;
+                //============================================
+            }
+            catch(Exception showerror)
+            {
+                if (showerror.Message.LastIndexOf("索引超出範圍") != -1)
+                    MessageBox.Show("查無資料", "輸入錯誤", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                PreviousItem.Enabled = false;
+                NextItem.Enabled = false;
+                UpdateData.Enabled = false;
+                DeleteData.Enabled = false;
+            }
+
+        }
+
+        private void ClickUpdate(object sender, EventArgs e)
+        {
+            updatecommand = "UPDATE `first test` SET `姓名`=@updatename,`學號`=@updateid,`成績`=@updatescore WHERE `姓名`=@originalname";
+
+            //============設定更新指令============
+            if (KeyName.Text.LastIndexOf(" ") != -1 || KeyID.Text.LastIndexOf(" ") != -1 || KeyScore.Text.LastIndexOf(" ") != -1 || KeyName.Text == "" || KeyID.Text == "" || KeyScore.Text == "")
+                MessageBox.Show("請檢查所有欄位都已填寫正確，不可留白或有空格！！", "輸入錯誤", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            else if (KeyName.Text == OriginalName && KeyID.Text == OriginalID && KeyScore.Text == OriginalScore)
+                MessageBox.Show("無更改任何資料", "訊息", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            else
+            {
+                if (KeyName.Text == OriginalName)
+                    updatecommand.Replace("`姓名`=@updatename", "");
+                if (KeyID.Text == OriginalID)
+                    updatecommand.Replace("`學號`=@updateid", "");
+                if (KeyScore.Text == OriginalScore)
+                    updatecommand.Replace("`成績`=@updatescore", "");
+
+                if (updatecommand.LastIndexOf(",,") != -1)
+                    updatecommand.Replace(",,", ",");
+                while (updatecommand.LastIndexOf(" ,") != -1 || updatecommand.LastIndexOf(", ") != -1)
+                {
+                    updatecommand.Replace(" ,", "");
+                    updatecommand.Replace(", ", "");
+                }
+                //====================================
+
+                //============開始更新============
+                MySqlConnection databaseconnect = new MySqlConnection(connectinfo);//建立連線
+                databaseconnect.Open();//連線開啟
+
+                MySqlCommand updatedata = new MySqlCommand(updatecommand, databaseconnect);
+                updatedata.Parameters.AddWithValue("@updatename", KeyName.Text);
+                updatedata.Parameters.AddWithValue("@updateid", KeyID.Text);
+                updatedata.Parameters.AddWithValue("@updatescore", KeyScore.Text);
+                updatedata.Parameters.AddWithValue("@originalname", OriginalName);
+                updatedata.ExecuteNonQuery();
+                //================================
+
+                MySqlCommand searchdata = new MySqlCommand(searchcommand, databaseconnect);
+                searchdata.Parameters.AddWithValue("@searchname", KeyName.Text);   //
+                searchdata.Parameters.AddWithValue("@searchid", KeyID.Text);       //將TextBox的值給予SQL指令
+                searchdata.Parameters.AddWithValue("@searchscore", KeyScore.Text); //
+
+                try
+                {
+                    DataTable showdata = new DataTable();
+                    MySqlDataAdapter show = new MySqlDataAdapter(searchdata);
+                    show.Fill(showdata);
+                    DataView.DataSource = showdata;
+                }
+                catch
+                {
+                    MySqlCommand showhome = new MySqlCommand(loadcommand, databaseconnect);
+                    DataTable showdata = new DataTable();
+                    MySqlDataAdapter show = new MySqlDataAdapter(showhome);
+                    show.Fill(showdata);
+                    DataView.DataSource = showdata;
+                }
+                
+
+                databaseconnect.Close();
+            }
+        }
+
+        private void ClickDelete(object sender, EventArgs e)
+        {
+            MySqlConnection databaseconnect = new MySqlConnection(connectinfo);//建立連線
+            databaseconnect.Open();//連線開啟
+
+            if (KeyName.Text.LastIndexOf(" ") != -1 || KeyID.Text.LastIndexOf(" ") != -1 || KeyScore.Text.LastIndexOf(" ") != -1)
+                MessageBox.Show("查無資料\n請檢查所有欄位都已填寫正確，不可有空格！！");
+            else if (KeyScore.Text != "")
+            {
+                if (KeyName.Text != "")
+                    deletecommand = "DELETE FROM `first test` WHERE `姓名`=@deletename && `成績`=@deletescore";
+                else if (KeyID.Text != "")
+                    deletecommand = "DELETE FROM `first test` WHERE `學號`=@deleteid && `成績`=@deletescore";
+                else if (KeyName.Text == "" && KeyID.Text == "")
+                    deletecommand = "DELETE FROM `first test` WHERE `成績`=@deletescore";
+            }
+            else
+            {
+                if (KeyName.Text != "")
+                    deletecommand = "DELETE FROM `first test` WHERE `姓名`=@deletename";
+                else if (KeyID.Text != "")
+                    deletecommand = "DELETE FROM `first test` WHERE `學號`=@deleteid";
+            }
+
+            MySqlCommand deletedata = new MySqlCommand(deletecommand, databaseconnect);
+            deletedata.Parameters.AddWithValue("@deletename", KeyName.Text);   //
+            deletedata.Parameters.AddWithValue("@deleteid", KeyID.Text);       //將TextBox的值給予SQL指令
+            deletedata.Parameters.AddWithValue("@deletescore", KeyScore.Text); //
+
+            choose = MessageBox.Show("將刪除此人的資料，此操作無法回復！"+
+                                     "\n確定執行？", "警告", MessageBoxButtons.YesNo);
+            if(choose== DialogResult.Yes)
+            {
+                deletedata.ExecuteNonQuery();
+
+                MySqlCommand loaddata = new MySqlCommand(loadcommand, databaseconnect);
+                DataTable showdata = new DataTable();
+                MySqlDataAdapter show = new MySqlDataAdapter(loaddata);
+                show.Fill(showdata);
+                DataView.DataSource = showdata;
+
+                databaseconnect.Close();
+            }
+            else
+                databaseconnect.Close();
+        }
+
+        private void ClickLoad(object sender, EventArgs e)
+        {
+            try
+            {
+                MySqlConnection databaseconnect = new MySqlConnection(connectinfo);//建立連線
+                databaseconnect.Open();//連線開啟
+                
+                //============載入並顯示============
+                MySqlCommand loaddata = new MySqlCommand(loadcommand, databaseconnect);
+                DataTable showdata = new DataTable();
+                MySqlDataAdapter show = new MySqlDataAdapter(loaddata);
+                show.Fill(showdata);
+                DataView.DataSource = showdata;
+                //==================================
+
+                databaseconnect.Close();//連線關閉
+
+                NextItem.Enabled = true;
+                InsertData.Enabled = true;
+                SearchData.Enabled = true;
+                row = 0;
+            }
+            catch { MessageBox.Show("請檢查你的網路連線及其它設定。", "無法連線", MessageBoxButtons.OK, MessageBoxIcon.Error); }
+        }
+
+        private void ClickPrevious(object sender, EventArgs e)
+        {
+            int datacount = DataView.Rows.Count;
+
+            NextItem.Enabled = true;
+            UpdateData.Enabled = true;
+            DeleteData.Enabled = true;
+
+            if (row == 0)
+            {
+                MessageBox.Show("無上一筆資料！！");
+                PreviousItem.Enabled = false;
+            }
+            else if (row > 0 && row <= datacount)
+            {
+                row--;
+                KeyName.Text = DataView.Rows[row].Cells[0].Value.ToString();
+                KeyID.Text = DataView.Rows[row].Cells[1].Value.ToString();
+                KeyScore.Text = DataView.Rows[row].Cells[2].Value.ToString();
+                DataView.CurrentCell = DataView.Rows[row].Cells[0];
+
+                OriginalName = KeyName.Text;
+                OriginalID = KeyID.Text;
+                OriginalScore = KeyScore.Text;
+            }
+        }
+
+        private void ClickNext(object sender, EventArgs e)
+        {
+            int datacount = DataView.Rows.Count;
+
+            PreviousItem.Enabled = true;
+            UpdateData.Enabled = true;
+            DeleteData.Enabled = true;
+
+            if (row == datacount)
+            {
+                MessageBox.Show("無下一筆資料！！");
+                NextItem.Enabled = false;
+            }
+            else if (row >= 0 && row < datacount)
+            {
+                KeyName.Text = DataView.Rows[row].Cells[0].Value.ToString();
+                KeyID.Text = DataView.Rows[row].Cells[1].Value.ToString();
+                KeyScore.Text = DataView.Rows[row].Cells[2].Value.ToString();
+                DataView.CurrentCell = DataView.Rows[row].Cells[0];
+
+                OriginalName = KeyName.Text;
+                OriginalID = KeyID.Text;
+                OriginalScore = KeyScore.Text;
+                row++;
+            }
+        }
+
+        private void ClickClean(object sender, EventArgs e)
+        {
+            KeyName.Text = "";
+            KeyID.Text = "";
+            KeyScore.Text = "";
+        }
+    }
+ }
